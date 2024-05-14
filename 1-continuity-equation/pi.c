@@ -25,15 +25,13 @@ unsigned long long shoot_circle_segment(unsigned long long iterations) //Monte C
         srand(time(0));
     #endif
     #ifdef LIBSODIUM_ENABLED
-        if (sodium_init() < 0)
-        {
+        if (sodium_init() < 0) {
             fprintf(stderr, "Unable to init libsodium!\n");
             return 1;
         }
     #endif
 
-    for (unsigned long long  i = 0; i < iterations; i++) //shoot at the inscribed circle segment (x>0, y>0)
-    {
+    for (unsigned long long  i = 0; i < iterations; i++) { //shoot at the inscribed circle segment (x>0, y>0)
         #ifndef LIBSODIUM_ENABLED
             x = rand();
             y = rand();
@@ -63,17 +61,13 @@ int main(int argc, char** argv)
     unsigned long long total_iterations = size * SHOOT_ITERATIONS;
     unsigned long long n_hits = shoot_circle_segment(SHOOT_ITERATIONS);
 
-    if (rank)
-    {
+    if (rank) {
         MPI_Send(&n_hits, 1, MPI_UNSIGNED_LONG_LONG, 0, TAG, MPI_COMM_WORLD);
     }
-    else //main node with rank = 0
-    {
+    else { //main node with rank = 0
         unsigned long long buff = 0;
-        for (int i = 0; i < size - 1; i++)
-        {
-            if (MPI_Recv(&buff, 1, MPI_UNSIGNED_LONG_LONG, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
-            {
+        for (int i = 0; i < size - 1; i++) {
+            if (MPI_Recv(&buff, 1, MPI_UNSIGNED_LONG_LONG, MPI_ANY_SOURCE, TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS) {
                 fprintf(stderr, "Unable to receive MPI message!\n");
                 return 1;
             }
