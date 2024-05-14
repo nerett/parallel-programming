@@ -31,8 +31,8 @@ int main(int argc, char** argv)
         }
 
         clock_gettime(CLOCK_MONOTONIC, &tend);
-        double dt = ((tend.tv_sec - tstart.tv_sec)*1e9 + (tend.tv_nsec - tstart.tv_nsec)) / COMM_ITERATIONS;
-        printf("Communication time is %lfns\n", dt);
+        double dt = ((tend.tv_sec - tstart.tv_sec)*1e9 + (tend.tv_nsec - tstart.tv_nsec)) / (COMM_ITERATIONS * 2);
+        printf("Communication time is %.1lfns\n", dt);
     }
     else if (rank == 1) {
         for (int i = 0; i < COMM_ITERATIONS; i++) {
