@@ -4,6 +4,9 @@ all:
 pi:
 	mpicc pi.c -lsodium -DLIBSODIUM_ENABLED
 
+communication:
+	mpicc communication.c
+
 run:
 	mpirun ./a.out
 
