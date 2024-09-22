@@ -20,7 +20,7 @@ unsigned long long shoot_circle_segment(unsigned long long iterations) //Monte C
     const unsigned long long R2 = R*R;
     unsigned long long x = 0, y = 0;
     unsigned long long counter = 0;
-    
+
     #ifndef LIBSODIUM_ENABLED
         srand(time(0));
     #endif
@@ -57,7 +57,7 @@ int main(int argc, char** argv)
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    
+
     unsigned long long total_iterations = size * SHOOT_ITERATIONS;
     unsigned long long n_hits = shoot_circle_segment(SHOOT_ITERATIONS);
 
