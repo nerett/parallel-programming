@@ -4,16 +4,17 @@
 #include <sys/mman.h>
 #include <omp.h>
 
-#define MATRIX_DIM 2048
+#define MATRIX_DIM 8192
 #define MATRIX_ELEM_MAX 100
+#define MATRIX_MUL_BS 64
+
+// 8128 + 64; 49 vs 28
 
 #ifdef PARALLEL
     const int enable_omp_parallel = 1;
 #else
     const int enable_omp_parallel = 0;
 #endif
-
-//#define MAGIC_KEY 0xDEAD10CC
 
 enum {
         NS_PER_SECOND = 1000000000,
@@ -22,7 +23,9 @@ enum {
 
 long* create_matrix(size_t dim)
 {
-    void* ptr = mmap(NULL, sizeof(long)*dim*dim, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0); // MAP_POPULATE
+    const int prot_flags = PROT_READ|PROT_WRITE;
+    const int map_flags = MAP_PRIVATE|MAP_ANON; // MAP_POPULATE
+    void* ptr = mmap(NULL, sizeof(long)*dim*dim, prot_flags, map_flags, -1, 0);
     if(ptr == MAP_FAILED) {
         perror("mmap");
         return NULL;
@@ -64,6 +67,39 @@ void transposed_mul_matrix(long* A, long* B, long* C, size_t dim)
             for (int k = 0; k < dim; ++k) {
                 for (int j = 0; j < dim; ++j) {
                     C[i*dim + j] += A[i*dim + k] * B[k*dim + j];
+                }
+            }
+        }
+}
+
+void block_mul_matrix(long* A, long* B, long* C, size_t dim)
+{
+    size_t bs = MATRIX_MUL_BS;
+    long* rres = NULL;
+    long* rmul1 = NULL;
+    long* rmul2 = NULL;
+    long* mul1 = A;
+    long* mul2 = B;
+    long* res = C;
+
+    #pragma omp parallel for if (enable_omp_parallel)
+        for (size_t i = 0; i < dim; i += bs) {
+            for (size_t j = 0; j < dim; j += bs) {
+                for (size_t k = 0; k < dim; k += bs) {
+                    rres = &res[i*dim + j];
+                    rmul1 = &mul1[i*dim + k];
+                    for (size_t i2 = 0; i2 < bs; ++i2) {
+                        rmul2 = &mul2[k*dim + j];
+                        for (size_t k2 = 0; k2 < bs; ++k2) {
+                            for (size_t j2 = 0; j2 < bs; ++j2) {
+                                rres[j2] += rmul1[k2] * rmul2[j2];
+                            }
+                            rmul2 += dim;
+                        }
+
+                        rres += dim;
+                        rmul1 += dim;
+                    }
                 }
             }
         }
@@ -125,6 +161,9 @@ int main()
     #ifdef TRANSPOSE
         printf("Using transposed_mul_matrix()\n");
         transposed_mul_matrix(A, B, C, MATRIX_DIM);
+    #elif BLOCK
+        printf("Using block_mul_matrix()\n");
+        block_mul_matrix(A, B, C, MATRIX_DIM);
     #else
         printf("Using mul_matrix()\n");
         mul_matrix(A, B, C, MATRIX_DIM);
