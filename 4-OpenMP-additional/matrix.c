@@ -110,7 +110,6 @@ int main()
     if (enable_omp_parallel) {
         printf("OpenMP parallelization enabled\n");
     }
-    printf("\n");
 
     long* A = create_matrix(MATRIX_DIM);
     long* B = create_matrix(MATRIX_DIM);
@@ -124,13 +123,17 @@ int main()
     clock_gettime(CLOCK_MONOTONIC, &start);
 
     #ifdef TRANSPOSE
+        printf("Using transposed_mul_matrix()\n");
         transposed_mul_matrix(A, B, C, MATRIX_DIM);
     #else
+        printf("Using mul_matrix()\n");
         mul_matrix(A, B, C, MATRIX_DIM);
     #endif
 
     clock_gettime(CLOCK_MONOTONIC, &finish);
     sub_timespec(start, finish, &delta);
+
+    printf("\n");
     printf("Multiplication time: %d.%.9ld\n", (int)delta.tv_sec, delta.tv_nsec);
 
     printf("hash(A) = %x\n", hash_matrix(A, MATRIX_DIM));
