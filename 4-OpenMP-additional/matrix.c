@@ -5,9 +5,12 @@
 #include <immintrin.h>
 #include <omp.h>
 
-#define MATRIX_DIM 8192
-#define MATRIX_ELEM_MAX 100
-#define MATRIX_MUL_BS 512
+#ifndef MATRIX_DIM
+    #define MATRIX_DIM 8192
+#endif
+#ifndef MATRIX_MUL_BS
+    #define MATRIX_MUL_BS 512
+#endif
 
 #ifdef PARALLEL
     const int enable_omp_parallel = 1;
@@ -17,7 +20,8 @@
 
 enum {
         NS_PER_SECOND = 1000000000,
-        MAGIC_KEY = 0xDEAD10CC
+        MAGIC_KEY = 0xDEAD10CC,
+        MATRIX_ELEM_MAX = 100
     };
 
 
@@ -36,7 +40,7 @@ long* create_matrix(size_t dim)
 
 void delete_matrix(long* matrix, size_t dim)
 {
-    munlock(matrix, sizeof(long)*dim*dim);
+    munmap(matrix, sizeof(long)*dim*dim);
 }
 
 void init_matrix(long* matrix, size_t dim, unsigned int seed)
@@ -83,30 +87,27 @@ void transposed_mul_matrix(long* A, long* B, long* C, size_t dim)
 void block_mul_matrix(long* A, long* B, long* C, size_t dim)
 {
     size_t bs = MATRIX_MUL_BS;
-    long* rres = NULL;
-    long* rmul1 = NULL;
-    long* rmul2 = NULL;
-    long* mul1 = A;
-    long* mul2 = B;
-    long* res = C;
 
     #pragma omp parallel for if (enable_omp_parallel)
         for (size_t i = 0; i < dim; i += bs) {
             for (size_t j = 0; j < dim; j += bs) {
                 for (size_t k = 0; k < dim; k += bs) {
-                    rres = &res[i*dim + j];
-                    rmul1 = &mul1[i*dim + k];
+
+                    long* rC = &C[i*dim + j];
+                    long* rA = &A[i*dim + k];
                     for (size_t i2 = 0; i2 < bs; ++i2) {
-                        rmul2 = &mul2[k*dim + j];
+
+                        long* rB = &B[k*dim + j];
                         for (size_t k2 = 0; k2 < bs; ++k2) {
                             for (size_t j2 = 0; j2 < bs; ++j2) {
-                                rres[j2] += rmul1[k2] * rmul2[j2];
+                                rC[j2] += rA[k2] * rB[j2];
                             }
-                            rmul2 += dim;
+
+                            rB += dim;
                         }
 
-                        rres += dim;
-                        rmul1 += dim;
+                        rC += dim;
+                        rA += dim;
                     }
                 }
             }
