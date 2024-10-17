@@ -2,13 +2,12 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/mman.h>
+#include <immintrin.h>
 #include <omp.h>
 
 #define MATRIX_DIM 8192
 #define MATRIX_ELEM_MAX 100
-#define MATRIX_MUL_BS 64
-
-// 8128 + 64; 49 vs 28
+#define MATRIX_MUL_BS 512
 
 #ifdef PARALLEL
     const int enable_omp_parallel = 1;
@@ -20,6 +19,7 @@ enum {
         NS_PER_SECOND = 1000000000,
         MAGIC_KEY = 0xDEAD10CC
     };
+
 
 long* create_matrix(size_t dim)
 {
@@ -45,6 +45,14 @@ void init_matrix(long* matrix, size_t dim, unsigned int seed)
 
     for (size_t i = 0; i < dim*dim; ++i) {
         matrix[i] = rand() % MATRIX_ELEM_MAX;
+    }
+}
+
+void transpose_matrix(long* A, long* T, size_t dim) {
+    for (size_t i = 0; i < dim; ++i) {
+        for (size_t j = 0; j < dim; ++j) {
+            T[j*dim + i] = A[i*dim + j];
+        }
     }
 }
 
@@ -105,6 +113,31 @@ void block_mul_matrix(long* A, long* B, long* C, size_t dim)
         }
 }
 
+#ifdef SIMD
+void simd_mul_matrix(long* A, long* BT, long* C, size_t dim)
+{
+    #pragma omp parallel for if (enable_omp_parallel)
+        for (size_t i = 0; i < dim; ++i) {
+            for (size_t j = 0; j < dim; ++j) {
+
+                __m256i c_vec = _mm256_setzero_si256();
+                for (size_t k = 0; k < dim; k += 4) {
+                    __m256i a_vec = _mm256_loadu_si256((__m256i*)&A[i*dim + k]);
+                    __m256i b_vec = _mm256_loadu_si256((__m256i*)&BT[j*dim + k]);
+
+                    __m256i mul_result = _mm256_mul_epi32(a_vec, b_vec);
+
+                    c_vec = _mm256_add_epi64(c_vec, mul_result);
+                }
+
+                long temp[4];
+                _mm256_storeu_si256((__m256i*)temp, c_vec);
+                C[i*dim + j] += temp[0] + temp[1] + temp[2] + temp[3];
+            }
+        }
+}
+#endif
+
 void print_matrix(long* matrix, size_t dim)
 {
     for (size_t i = 0; i < dim; ++i) {
@@ -149,11 +182,13 @@ int main()
 
     long* A = create_matrix(MATRIX_DIM);
     long* B = create_matrix(MATRIX_DIM);
+    long* BT = create_matrix(MATRIX_DIM);
     long* C = create_matrix(MATRIX_DIM);
     // mlockall(MCL_CURRENT | MCL_FUTURE);
 
     init_matrix(A, MATRIX_DIM, 0xA);
     init_matrix(B, MATRIX_DIM, 0xB);
+    transpose_matrix(B, BT, MATRIX_DIM);
 
     struct timespec start, finish, delta;
     clock_gettime(CLOCK_MONOTONIC, &start);
@@ -164,6 +199,9 @@ int main()
     #elif BLOCK
         printf("Using block_mul_matrix()\n");
         block_mul_matrix(A, B, C, MATRIX_DIM);
+    #elif SIMD
+        printf("Using simd_mul_matrix()\n");
+        simd_mul_matrix(A, BT, C, MATRIX_DIM);
     #else
         printf("Using mul_matrix()\n");
         mul_matrix(A, B, C, MATRIX_DIM);
