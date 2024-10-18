@@ -9,14 +9,13 @@
 #endif
 
 enum {
-        NS_PER_SECOND = 1000000000,
         ARR_ELEM_MAX = 100
     };
 
 long* create_array(size_t len)
 {
     const int prot_flags = PROT_READ|PROT_WRITE;
-    const int map_flags = MAP_PRIVATE|MAP_ANON; // MAP_POPULATE
+    const int map_flags = MAP_PRIVATE|MAP_ANON;
     void* ptr = mmap(NULL, sizeof(long)*len, prot_flags, map_flags, -1, 0);
     if(ptr == MAP_FAILED) {
         perror("mmap");
