@@ -75,9 +75,9 @@ void mul_matrix(long* A, long* B, long* C, size_t dim)
 void transposed_mul_matrix(long* A, long* B, long* C, size_t dim)
 {
     #pragma omp parallel for if (enable_omp_parallel)
-        for (int i = 0; i < dim; ++i) {
-            for (int k = 0; k < dim; ++k) {
-                for (int j = 0; j < dim; ++j) {
+        for (size_t i = 0; i < dim; ++i) {
+            for (size_t k = 0; k < dim; ++k) {
+                for (size_t j = 0; j < dim; ++j) {
                     C[i*dim + j] += A[i*dim + k] * B[k*dim + j];
                 }
             }
