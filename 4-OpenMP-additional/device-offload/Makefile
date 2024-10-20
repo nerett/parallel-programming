@@ -17,6 +17,9 @@ test:
 avg:
 	$(ENVC) $(CC) $(CFLAGS) offload-avg.c
 
+matrix:
+	$(ENVC) $(CC) $(CFLAGS) offload-matrix.c
+
 run:
 	$(ENVC) ./a.out
 
