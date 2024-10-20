@@ -44,21 +44,8 @@ void init_matrix(long* matrix, size_t dim, unsigned int seed)
     }
 }
 
-void transpose_matrix(long* A, long* T, size_t dim) {
-    for (size_t i = 0; i < dim; ++i) {
-        for (size_t j = 0; j < dim; ++j) {
-            T[j*dim + i] = A[i*dim + j];
-        }
-    }
-}
-
 unsigned int hash_matrix(long* matrix, size_t dim)
 {
-    // unsigned int hash = 0;
-    // for (size_t i = 0; i < dim*dim; ++i) {
-    //     hash += (i % dim) * (matrix[i] ^ MAGIC_KEY);
-    // }
-
     unsigned int hash = 0;
     for (size_t i = 0; i < dim*dim; ++i) {
         hash += (i % dim) * ((long)matrix[i] ^ MAGIC_KEY);
@@ -79,8 +66,7 @@ void print_matrix(long* matrix, size_t dim)
 
 void target_mul_matrix(long* A, long* B, long* C, size_t dim)
 {
-    size_t msize = dim * dim;
-    #pragma omp target teams distribute parallel for collapse(2) map(tofrom: dim, A[:msize], B[:msize], C[:msize])
+    #pragma omp target teams distribute parallel for collapse(2)
     for (size_t i = 0; i < dim; ++i) {
         for (size_t j = 0; j < dim; ++j) {
             long sum = 0;
@@ -92,85 +78,71 @@ void target_mul_matrix(long* A, long* B, long* C, size_t dim)
     }
 }
 
-#pragma omp declare target
-    void target_mul_matrix(long* A, long* B, long* C, size_t dim);
-#pragma omp end declare target
+void target_block_mul_matrix(long* A, long* B, long* C, size_t dim)
+{
+    size_t bs = MATRIX_MUL_BS;
+
+    #pragma omp target teams distribute parallel for collapse(2)
+    for (size_t i = 0; i < dim; i += bs) {
+        for (size_t j = 0; j < dim; j += bs) {
+            for (size_t k = 0; k < dim; k += bs) {
+
+                long* rC = &C[i*dim + j];
+                long* rA = &A[i*dim + k];
+                for (size_t i2 = 0; i2 < bs; ++i2) {
+
+                    long* rB = &B[k*dim + j];
+                    for (size_t k2 = 0; k2 < bs; ++k2) {
+                        for (size_t j2 = 0; j2 < bs; ++j2) {
+                            rC[j2] += rA[k2] * rB[j2];
+                        }
+
+                        rB += dim;
+                    }
+
+                    rC += dim;
+                    rA += dim;
+                }
+            }
+        }
+    }
+}
 
 int main()
 {
+    printf("Matrix size: %d x %d\n", MATRIX_DIM, MATRIX_DIM);
+    printf("Maximum element size: %d\n", MATRIX_ELEM_MAX);
+
     long* A = create_matrix(MATRIX_DIM);
     long* B = create_matrix(MATRIX_DIM);
-    long* BT = create_matrix(MATRIX_DIM);
     long* C = create_matrix(MATRIX_DIM);
 
     init_matrix(A, MATRIX_DIM, 0xA);
     init_matrix(B, MATRIX_DIM, 0xB);
-    transpose_matrix(B, BT, MATRIX_DIM);
 
-    size_t dim = MATRIX_DIM;
-    const size_t msize = dim*dim;
+    const size_t msize = MATRIX_DIM*MATRIX_DIM;
+    double start = 0, end = 0;
 
-    double start = omp_get_wtime();
+    #pragma omp target data map(to: A[:msize], B[:msize])
+    #pragma omp target data map(tofrom: C[:msize])
+    {
+        start = omp_get_wtime();
 
-    target_mul_matrix(A, B, C, MATRIX_DIM);
+        #ifdef BLOCK
+            printf("Using target_block_mul_matrix()\n");
+            target_block_mul_matrix(A, B, C, MATRIX_DIM);
+        #else
+            printf("Using target_mul_matrix()\n");
+            target_mul_matrix(A, B, C, MATRIX_DIM);
+        #endif
 
-    // #pragma omp target teams distribute parallel for collapse(2) map(tofrom: dim, A[:msize], B[:msize], C[:msize])
-    // for (size_t i = 0; i < dim; ++i) {
-    //     for (size_t j = 0; j < dim; ++j) {
-    //         long sum = 0;
-    //         for (size_t k = 0; k < dim; ++k) {
-    //             sum += A[i*dim + k] * B[k*dim + j];
-    //         }
-    //         C[i*dim + j] = sum;
-    //     }
-    // }
-
-    // for (size_t i = 0; i < dim; i += MATRIX_MUL_BS) {
-    //     for (size_t j = 0; j < dim; j += MATRIX_MUL_BS) {
-    //         for (size_t k = 0; k < dim; k += MATRIX_MUL_BS) {
-
-    //             for (size_t i2 = 0; i2 < MATRIX_MUL_BS; ++i2) {
-
-    //                 long* rA = &A[i*dim + k];
-    //                 long* rB = &B[k*dim + j];
-    //                 long* rC = &C[i*dim + j];
-    //                 for (size_t k2 = 0; k2 < MATRIX_MUL_BS; ++k2) {
-    //                     for (size_t j2 = 0; j2 < MATRIX_MUL_BS; ++j2) {
-    //                         rC[j2] += rA[k2] * rB[j2];
-    //                     }
-
-    //                     rB += dim;
-    //                 }
-
-    //                 rC += dim;
-    //                 rA += dim;
-    //             }
-    //         }
-    //     }
-    // }
-
-    // for (size_t i = 0; i < dim; i += MATRIX_MUL_BS) {
-    //     for (size_t j = 0; j < dim; j += MATRIX_MUL_BS) {
-    //         for (size_t k = 0; k < dim; k += MATRIX_MUL_BS) {
-    //             C[i*dim + j] += A[i*dim + k] * B[k*dim + j];
-    //         }
-    //     }
-    // }
-
-    double end = omp_get_wtime();
+        end = omp_get_wtime();
+    }
 
     printf("\n");
     printf("Calculation time: %lf\n", end - start);
 
-
     printf("hash(A) = %x\n", hash_matrix(A, MATRIX_DIM));
     printf("hash(B) = %x\n", hash_matrix(B, MATRIX_DIM));
     printf("hash(C) = %x\n", hash_matrix(C, MATRIX_DIM));
-
-    // printf("A:\n");
-    // print_matrix(A, MATRIX_DIM);
-    // printf("B:\n");
-    // print_matrix(B, MATRIX_DIM);
-    // printf("C:\n");
-    // print_matrix(C, MATRIX_DIM);
 }
