@@ -1,4 +1,4 @@
-#include "../matrix.h"
+#include "../matrix-tools.h"
 #include <omp.h>
 
 #ifndef MATRIX_DIM

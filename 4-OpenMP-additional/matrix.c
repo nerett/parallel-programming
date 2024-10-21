@@ -1,4 +1,4 @@
-#include "matrix.h"
+#include "matrix-tools.h"
 #include <immintrin.h>
 #include <omp.h>
 
