@@ -24,5 +24,5 @@ run:
 	$(ENVC) ./a.out
 
 clean:
-	rm *\.out
-	rm *\.o
+	rm -f *\.out
+	rm -f *\.o
