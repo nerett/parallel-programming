@@ -21,6 +21,9 @@ numprocs:
 matrix:
 	$(CC) $(CFLAGS) $(AVXFLAGS) matrix.c
 
+sort:
+	$(CC) $(CFLAGS) sort.c
+
 run:
 	./a.out
 
