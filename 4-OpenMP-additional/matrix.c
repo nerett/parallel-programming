@@ -69,7 +69,7 @@ void block_mul_matrix(long* A, long* B, long* C, size_t dim)
         }
 }
 
-#ifdef SIMD
+#ifdef AVX
 void simd_mul_matrix(long* A, long* BT, long* C, size_t dim)
 {
     #pragma omp parallel for if (enable_omp_parallel)
@@ -94,63 +94,112 @@ void simd_mul_matrix(long* A, long* BT, long* C, size_t dim)
 }
 #endif
 
-inline void _add_matrix(long* A, long* B, long* C, size_t n) {
-    #pragma omp parallel for if(enable_omp_parallel)
-    for (size_t i = 0; i < n; i++) {
-        for (size_t j = 0; j < n; j++) {
-            C[i * n + j] = A[i * n + j] + B[i * n + j];
-        }
+#ifdef AVX
+inline void __avx_add_matrix(long* A, long* B, long* C, size_t dim) {
+    size_t size = dim * dim;
+    size_t i = 0;
+
+    for (; i + 4 <= size; i += 4) {
+        __m256i a_vec = _mm256_loadu_si256((__m256i*)&A[i]);
+        __m256i b_vec = _mm256_loadu_si256((__m256i*)&B[i]);
+
+        __m256i c_vec = _mm256_add_epi64(a_vec, b_vec);
+
+        _mm256_storeu_si256((__m256i*)&C[i], c_vec);
+    }
+
+    // Process remaining elements that do not fit in a 256-bit register
+    for (; i < size; i++) {
+        C[i] = A[i] + B[i];
     }
 }
 
-inline void _sub_matrix(long* A, long* B, long* C, size_t n) {
-    #pragma omp parallel for if(enable_omp_parallel)
-    for (size_t i = 0; i < n; i++) {
-        for (size_t j = 0; j < n; j++) {
-            C[i * n + j] = A[i * n + j] - B[i * n + j];
-        }
+inline void __avx_sub_matrix(long* A, long* B, long* C, size_t dim) {
+    size_t size = dim * dim;
+    size_t i = 0;
+
+    for (; i + 4 <= size; i += 4) {
+        __m256i a_vec = _mm256_loadu_si256((__m256i*)&A[i]);
+        __m256i b_vec = _mm256_loadu_si256((__m256i*)&B[i]);
+
+        __m256i c_vec = _mm256_sub_epi64(a_vec, b_vec);
+
+        _mm256_storeu_si256((__m256i*)&C[i], c_vec);
+    }
+
+    // Process remaining elements that do not fit in a 256-bit register
+    for (; i < size; i++) {
+        C[i] = A[i] - B[i];
     }
 }
+#endif
 
-void _strassen(long* A, long* B, long* C, size_t n) {
-    if (n <= 128) {
-        transposed_mul_matrix(A, B, C, n);
+void _add_matrix(long* A, long* B, long* C, size_t dim) {
+    #ifdef AVX
+        __avx_add_matrix(A, B, C, dim);
+    #else
+        #pragma omp parallel for if(enable_omp_parallel)
+        for (size_t i = 0; i < dim; i++) {
+            for (size_t j = 0; j < dim; j++) {
+                C[i*dim + j] = A[i*dim + j] + B[i*dim + j];
+            }
+        }
+    #endif
+}
+
+void _sub_matrix(long* A, long* B, long* C, size_t dim) {
+    #ifdef AVX
+        __avx_sub_matrix(A, B, C, dim);
+    #else
+        #pragma omp parallel for if(enable_omp_parallel)
+        for (size_t i = 0; i < dim; i++) {
+            for (size_t j = 0; j < dim; j++) {
+                C[i*dim + j] = A[i*dim + j] - B[i*dim + j];
+            }
+        }
+    #endif
+}
+
+
+void _strassen(long* A, long* B, long* C, size_t dim) {
+    if (dim <= 128) {
+        transposed_mul_matrix(A, B, C, dim);
 
         return;
     }
 
-    size_t newSize = n / 2;
-    long* A11 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* A12 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* A21 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* A22 = (long*)calloc(newSize * newSize, sizeof(long));
+    size_t new_dim = dim / 2;
+    long* A11 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* A12 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* A21 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* A22 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-    long* B11 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* B12 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* B21 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* B22 = (long*)calloc(newSize * newSize, sizeof(long));
+    long* B11 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* B12 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* B21 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* B22 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-    long* M1 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* M2 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* M3 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* M4 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* M5 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* M6 = (long*)calloc(newSize * newSize, sizeof(long));
-    long* M7 = (long*)calloc(newSize * newSize, sizeof(long));
+    long* M1 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* M2 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* M3 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* M4 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* M5 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* M6 = (long*)calloc(new_dim * new_dim, sizeof(long));
+    long* M7 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
     // Divide matrices into quadrants
     #pragma omp parallel for collapse(2) if(enable_omp_parallel)
-    for (size_t i = 0; i < newSize; i++) {
-        for (size_t j = 0; j < newSize; j++) {
-            A11[i * newSize + j] = A[i * n + j];
-            A12[i * newSize + j] = A[i * n + j + newSize];
-            A21[i * newSize + j] = A[(i + newSize) * n + j];
-            A22[i * newSize + j] = A[(i + newSize) * n + j + newSize];
+    for (size_t i = 0; i < new_dim; i++) {
+        for (size_t j = 0; j < new_dim; j++) {
+            A11[i*new_dim + j] = A[i*dim + j];
+            A12[i*new_dim + j] = A[i*dim + j + new_dim];
+            A21[i*new_dim + j] = A[(i + new_dim)*dim + j];
+            A22[i*new_dim + j] = A[(i + new_dim)*dim + j + new_dim];
 
-            B11[i * newSize + j] = B[i * n + j];
-            B12[i * newSize + j] = B[i * n + j + newSize];
-            B21[i * newSize + j] = B[(i + newSize) * n + j];
-            B22[i * newSize + j] = B[(i + newSize) * n + j + newSize];
+            B11[i*new_dim + j] = B[i*dim + j];
+            B12[i*new_dim + j] = B[i*dim + j + new_dim];
+            B21[i*new_dim + j] = B[(i + new_dim)*dim + j];
+            B22[i*new_dim + j] = B[(i + new_dim)*dim + j + new_dim];
         }
     }
 
@@ -160,12 +209,12 @@ void _strassen(long* A, long* B, long* C, size_t n) {
         {
             #pragma omp task shared(M1) if(enable_omp_parallel)
             {
-                long* temp1 = (long*)calloc(newSize * newSize, sizeof(long));
-                long* temp2 = (long*)calloc(newSize * newSize, sizeof(long));
+                long* temp1 = (long*)calloc(new_dim * new_dim, sizeof(long));
+                long* temp2 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-                _add_matrix(A11, A22, temp1, newSize);
-                _add_matrix(B11, B22, temp2, newSize);
-                _strassen(temp1, temp2, M1, newSize);
+                _add_matrix(A11, A22, temp1, new_dim);
+                _add_matrix(B11, B22, temp2, new_dim);
+                _strassen(temp1, temp2, M1, new_dim);
 
                 free(temp1);
                 free(temp2);
@@ -173,52 +222,52 @@ void _strassen(long* A, long* B, long* C, size_t n) {
 
             #pragma omp task shared(M2) if(enable_omp_parallel)
             {
-                long* temp1 = (long*)calloc(newSize * newSize, sizeof(long));
+                long* temp1 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-                _add_matrix(A21, A22, temp1, newSize);
-                _strassen(temp1, B11, M2, newSize);
+                _add_matrix(A21, A22, temp1, new_dim);
+                _strassen(temp1, B11, M2, new_dim);
 
                 free(temp1);
             }
 
             #pragma omp task shared(M3) if(enable_omp_parallel)
             {
-                long* temp2 = (long*)calloc(newSize * newSize, sizeof(long));
+                long* temp2 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-                _sub_matrix(B12, B22, temp2, newSize);
-                _strassen(A11, temp2, M3, newSize);
+                _sub_matrix(B12, B22, temp2, new_dim);
+                _strassen(A11, temp2, M3, new_dim);
 
                 free(temp2);
             }
 
             #pragma omp task shared(M4) if(enable_omp_parallel)
             {
-                long* temp2 = (long*)calloc(newSize * newSize, sizeof(long));
+                long* temp2 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-                _sub_matrix(B21, B11, temp2, newSize);
-                _strassen(A22, temp2, M4, newSize);
+                _sub_matrix(B21, B11, temp2, new_dim);
+                _strassen(A22, temp2, M4, new_dim);
 
                 free(temp2);
             }
 
             #pragma omp task shared(M5) if(enable_omp_parallel)
             {
-                long* temp1 = (long*)calloc(newSize * newSize, sizeof(long));
+                long* temp1 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-                _add_matrix(A11, A12, temp1, newSize);
-                _strassen(temp1, B22, M5, newSize);
+                _add_matrix(A11, A12, temp1, new_dim);
+                _strassen(temp1, B22, M5, new_dim);
 
                 free(temp1);
             }
 
             #pragma omp task shared(M6) if(enable_omp_parallel)
             {
-                long* temp1 = (long*)calloc(newSize * newSize, sizeof(long));
-                long* temp2 = (long*)calloc(newSize * newSize, sizeof(long));
+                long* temp1 = (long*)calloc(new_dim * new_dim, sizeof(long));
+                long* temp2 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-                _sub_matrix(A21, A11, temp1, newSize);
-                _add_matrix(B11, B12, temp2, newSize);
-                _strassen(temp1, temp2, M6, newSize);
+                _sub_matrix(A21, A11, temp1, new_dim);
+                _add_matrix(B11, B12, temp2, new_dim);
+                _strassen(temp1, temp2, M6, new_dim);
 
                 free(temp1);
                 free(temp2);
@@ -226,12 +275,12 @@ void _strassen(long* A, long* B, long* C, size_t n) {
 
             #pragma omp task shared(M7) if(enable_omp_parallel)
             {
-                long* temp1 = (long*)calloc(newSize * newSize, sizeof(long));
-                long* temp2 = (long*)calloc(newSize * newSize, sizeof(long));
+                long* temp1 = (long*)calloc(new_dim * new_dim, sizeof(long));
+                long* temp2 = (long*)calloc(new_dim * new_dim, sizeof(long));
 
-                _sub_matrix(A12, A22, temp1, newSize);
-                _add_matrix(B21, B22, temp2, newSize);
-                _strassen(temp1, temp2, M7, newSize);
+                _sub_matrix(A12, A22, temp1, new_dim);
+                _add_matrix(B21, B22, temp2, new_dim);
+                _strassen(temp1, temp2, M7, new_dim);
 
                 free(temp1);
                 free(temp2);
@@ -243,12 +292,12 @@ void _strassen(long* A, long* B, long* C, size_t n) {
 
     // Combine results into C
     #pragma omp parallel for if(enable_omp_parallel)
-    for (size_t i = 0; i < newSize; i++) {
-        for (size_t j = 0; j < newSize; j++) {
-            C[i * n + j] += M1[i * newSize + j] + M4[i * newSize + j] - M5[i * newSize + j] + M7[i * newSize + j];
-            C[i * n + j + newSize] += M3[i * newSize + j] + M5[i * newSize + j];
-            C[(i + newSize) * n + j] += M2[i * newSize + j] + M4[i * newSize + j];
-            C[(i + newSize) * n + j + newSize] += M1[i * newSize + j] - M2[i * newSize + j] + M3[i * newSize + j] + M6[i * newSize + j];
+    for (size_t i = 0; i < new_dim; i++) {
+        for (size_t j = 0; j < new_dim; j++) {
+            C[i*dim + j] += M1[i*new_dim + j] + M4[i*new_dim + j] - M5[i*new_dim + j] + M7[i*new_dim + j];
+            C[i*dim + j + new_dim] += M3[i*new_dim + j] + M5[i*new_dim + j];
+            C[(i + new_dim)*dim + j] += M2[i*new_dim + j] + M4[i*new_dim + j];
+            C[(i + new_dim)*dim + j + new_dim] += M1[i*new_dim + j] - M2[i*new_dim + j] + M3[i*new_dim + j] + M6[i*new_dim + j];
         }
     }
 

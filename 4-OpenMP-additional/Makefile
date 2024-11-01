@@ -2,7 +2,10 @@ CC = gcc
 CFLAGS = -O3 -fopenmp $(UFLAGS)
 
 ifneq (, $(findstring -DSIMD, $(UFLAGS)))
-	SIMDFLAGS = -mavx2
+	override UFLAGS += -DAVX
+endif
+ifneq (, $(findstring -DAVX, $(UFLAGS)))
+	AVXFLAGS = -mavx2
 endif
 
 
@@ -16,7 +19,7 @@ numprocs:
 	$(CC) $(CFLAGS) numprocs.c
 
 matrix:
-	$(CC) $(CFLAGS) $(SIMDFLAGS) matrix.c
+	$(CC) $(CFLAGS) $(AVXFLAGS) matrix.c
 
 run:
 	./a.out
