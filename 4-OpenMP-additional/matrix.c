@@ -95,7 +95,8 @@ void simd_mul_matrix(long* A, long* BT, long* C, size_t dim)
 #endif
 
 #ifdef AVX
-inline void __avx_add_matrix(long* A, long* B, long* C, size_t dim) {
+inline void __avx_add_matrix(long* A, long* B, long* C, size_t dim)
+{
     size_t size = dim * dim;
     size_t i = 0;
 
@@ -114,7 +115,8 @@ inline void __avx_add_matrix(long* A, long* B, long* C, size_t dim) {
     }
 }
 
-inline void __avx_sub_matrix(long* A, long* B, long* C, size_t dim) {
+inline void __avx_sub_matrix(long* A, long* B, long* C, size_t dim)
+{
     size_t size = dim * dim;
     size_t i = 0;
 
@@ -134,7 +136,8 @@ inline void __avx_sub_matrix(long* A, long* B, long* C, size_t dim) {
 }
 #endif
 
-void _add_matrix(long* A, long* B, long* C, size_t dim) {
+void _add_matrix(long* A, long* B, long* C, size_t dim)
+{
     #ifdef AVX
         __avx_add_matrix(A, B, C, dim);
     #else
@@ -147,7 +150,8 @@ void _add_matrix(long* A, long* B, long* C, size_t dim) {
     #endif
 }
 
-void _sub_matrix(long* A, long* B, long* C, size_t dim) {
+void _sub_matrix(long* A, long* B, long* C, size_t dim)
+{
     #ifdef AVX
         __avx_sub_matrix(A, B, C, dim);
     #else
@@ -161,7 +165,8 @@ void _sub_matrix(long* A, long* B, long* C, size_t dim) {
 }
 
 
-void _strassen(long* A, long* B, long* C, size_t dim) {
+void _strassen(long* A, long* B, long* C, size_t dim)
+{
     if (dim <= 128) {
         transposed_mul_matrix(A, B, C, dim);
 
@@ -321,7 +326,8 @@ void _strassen(long* A, long* B, long* C, size_t dim) {
 }
 
 
-void fast_mul_matrix(long* A, long* B, long* C, size_t dim) {
+void fast_mul_matrix(long* A, long* B, long* C, size_t dim)
+{
     _strassen(A, B, C, dim);
 }
 
