@@ -3,14 +3,13 @@
 #include <sys/mman.h>
 #include <omp.h>
 
-// 1700000000
-// Defauilt is ~13.6GB when used with int64
 #ifndef ARR_LEN
     #define ARR_LEN 1 << 28
 #endif
 
 enum {
-        ARR_ELEM_MAX = 100
+        ARR_ELEM_MAX = 100,
+        MERGE_SORT_THRESHHOLD = 64
     };
 
 long* create_array(size_t len)
@@ -40,7 +39,7 @@ void init_array(long* arr, size_t len, unsigned int seed)
     }
 }
 
-void insertion_sort(long *array, size_t n) {
+void _insertion_sort(long *array, size_t n) {
     for (size_t i = 1; i < n; i++) {
 
         long key = array[i];
@@ -54,7 +53,7 @@ void insertion_sort(long *array, size_t n) {
     }
 }
 
-void merge(long *array, long *temp, int left, int mid, int right) {
+void _merge(long *array, long *temp, int left, int mid, int right) {
     int i = left, j = mid, k = left;
 
     while (i < mid && j < right) {
@@ -68,19 +67,19 @@ void merge(long *array, long *temp, int left, int mid, int right) {
     for (i = left; i < right; i++) array[i] = temp[i];
 }
 
-void parallel_merge_sort(long *array, long *temp, int left, int right, int threshold) {
+void _parallel_merge_sort(long *array, long *temp, int left, int right, int threshold) {
     if (right - left <= threshold) {
-        insertion_sort(array + left, right - left);
+        _insertion_sort(array + left, right - left);
     } else {
         int mid = left + (right - left)/2;
 
         #pragma omp task shared(array, temp) if(right - left > threshold)
-            parallel_merge_sort(array, temp, left, mid, threshold);
+            _parallel_merge_sort(array, temp, left, mid, threshold);
         #pragma omp task shared(array, temp) if(right - left > threshold)
-            parallel_merge_sort(array, temp, mid, right, threshold);
+            _parallel_merge_sort(array, temp, mid, right, threshold);
 
         #pragma omp taskwait
-        merge(array, temp, left, mid, right);
+        _merge(array, temp, left, mid, right);
     }
 }
 
@@ -89,7 +88,7 @@ void merge_sort(long *array, size_t n, int threshold) {
     #pragma omp parallel
     {
         #pragma omp single
-            parallel_merge_sort(array, temp, 0, n, threshold);
+            _parallel_merge_sort(array, temp, 0, n, threshold);
     }
     free(temp);
 }
@@ -103,16 +102,18 @@ int is_sorted(long *array, size_t n) {
 
 int main()
 {
+    printf("Array size: %d\n", ARR_LEN);
+
     long* array = create_array(ARR_LEN);
     init_array(array, ARR_LEN, 0xA77);
 
     double start = omp_get_wtime();
 
-    merge_sort(array, ARR_LEN, 128);
+    merge_sort(array, ARR_LEN, MERGE_SORT_THRESHHOLD);
 
     double end = omp_get_wtime();
 
-    //printf("\n");
+    printf("\n");
     printf("Calculation time: %lf\n", end - start);
 
     if (is_sorted(array, ARR_LEN)) {
@@ -120,5 +121,4 @@ int main()
     } else {
         printf("Array is NOT sorted!\n");
     }
-
 }
