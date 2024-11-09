@@ -46,8 +46,6 @@ int main()
         for (int j = 0; j < num_devices; ++j) {
             printf("    Device ID: %d\n", i);
 
-            cl_int clGetDeviceInfo(cl_device_id device, cl_device_info param_name, size_t param_value_size, void *param_value, size_t *param_value_size_ret);
-
             char name[STR_LEN];
             clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(name), name, NULL);
             printf("    Device name: %s\n", name);
