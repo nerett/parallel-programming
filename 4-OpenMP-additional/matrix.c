@@ -8,6 +8,9 @@
 #ifndef MATRIX_MUL_BS
     #define MATRIX_MUL_BS 512
 #endif
+#ifndef MATRIX_FASTMUL_THRESHHOLD
+    #define MATRIX_FASTMUL_THRESHHOLD 128
+#endif
 
 #ifdef PARALLEL
     const int enable_omp_parallel = 1;
@@ -164,10 +167,9 @@ void _sub_matrix(long* A, long* B, long* C, size_t dim)
     #endif
 }
 
-
 void _strassen(long* A, long* B, long* C, size_t dim)
 {
-    if (dim <= 128) {
+    if (dim <= MATRIX_FASTMUL_THRESHHOLD) {
         transposed_mul_matrix(A, B, C, dim);
 
         return;
@@ -324,7 +326,6 @@ void _strassen(long* A, long* B, long* C, size_t dim)
     free(M6);
     free(M7);
 }
-
 
 void fast_mul_matrix(long* A, long* B, long* C, size_t dim)
 {
