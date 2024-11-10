@@ -13,10 +13,10 @@
 #define STR_LEN 128
 
 #define PROGRAM_FILE "matrix.cl"
-#define KERNEL_FUNC "mul_matrix"
+#define KERNEL_FUNC "simd_mul_matrix"
 
 #ifndef MATRIX_DIM
-    #define MATRIX_DIM 8192
+    #define MATRIX_DIM 16384
 #endif
 #ifndef DEVICE_LOCAL_SIZE
     #define DEVICE_LOCAL_SIZE 16
@@ -146,7 +146,7 @@ int main()
     cl_program program = build_program(context, device, PROGRAM_FILE);
 
     cl_mem device_A = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, MATRIX_DIM * MATRIX_DIM * sizeof(long), A, &err);
-    cl_mem device_B = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, MATRIX_DIM * MATRIX_DIM * sizeof(long), B, &err);
+    cl_mem device_B = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, MATRIX_DIM * MATRIX_DIM * sizeof(long), BT, &err);
     cl_mem device_C = clCreateBuffer(context, CL_MEM_READ_WRITE|CL_MEM_COPY_HOST_PTR, MATRIX_DIM * MATRIX_DIM * sizeof(long), C, &err);
     if(err != CL_SUCCESS) {
         perror("clCreateBuffer");
@@ -175,7 +175,7 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    printf("Running mul_matrix() on device\n");
+    printf("Running %s() on device\n", KERNEL_FUNC);
 
     size_t global_size[2] = {MATRIX_DIM, MATRIX_DIM};
     size_t local_size[2] = {DEVICE_LOCAL_SIZE, DEVICE_LOCAL_SIZE};
