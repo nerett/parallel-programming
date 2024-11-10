@@ -14,10 +14,12 @@
 
 #define PROGRAM_FILE "matrix.cl"
 #define KERNEL_FUNC "mul_matrix"
-#define ARRAY_SIZE 64
 
 #ifndef MATRIX_DIM
     #define MATRIX_DIM 8192
+#endif
+#ifndef DEVICE_LOCAL_SIZE
+    #define DEVICE_LOCAL_SIZE 16
 #endif
 
 
@@ -84,11 +86,20 @@ cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename)
         perror("Couldn't find the program file");
         exit(EXIT_FAILURE);
     }
+
     fseek(program_handle, 0, SEEK_END);
     program_size = ftell(program_handle);
     rewind(program_handle);
+
     program_buffer = (char*)calloc(program_size + 1, sizeof(char));
-    fread(program_buffer, sizeof(char), program_size, program_handle);
+    size_t num_read = fread(program_buffer, sizeof(char), program_size, program_handle);
+    if(num_read != program_size) {
+        fclose(program_handle);
+
+        perror("Couldn't read the program file");
+        exit(EXIT_FAILURE);
+    }
+
     fclose(program_handle);
 
     program = clCreateProgramWithSource(ctx, 1, (const char**)&program_buffer, &program_size, &err);
@@ -158,9 +169,6 @@ int main()
     };
 
     int dim = MATRIX_DIM;
-    size_t global_size[2] = {dim, dim};
-    size_t local_size[2] = {16, 16};
-
     err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &device_A);
     err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &device_B);
     err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &device_C);
@@ -169,6 +177,9 @@ int main()
         perror("Couldn't create a kernel argument");
         exit(EXIT_FAILURE);
     }
+
+    size_t global_size[2] = {MATRIX_DIM, MATRIX_DIM};
+    size_t local_size[2] = {DEVICE_LOCAL_SIZE, DEVICE_LOCAL_SIZE};
 
     err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, NULL);
     if(err != CL_SUCCESS) {

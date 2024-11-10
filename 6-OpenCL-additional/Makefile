@@ -14,8 +14,8 @@ all:
 info:
 	$(ENVC) $(CC) $(CFLAGS) device-info.c $(LFLAGS)
 
-# matrix:
-# 	$(ENVC) $(CC) $(CFLAGS) offload-matrix.c
+matrix:
+	$(ENVC) $(CC) $(CFLAGS) cl-matrix.c $(LFLAGS)
 
 run:
 	$(ENVC) ./a.out
