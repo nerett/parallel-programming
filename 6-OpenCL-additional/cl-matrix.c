@@ -3,7 +3,14 @@
 
 #include "../4-OpenMP-additional/matrix-tools.h"
 
+/*
+    Even though this code targets OpenCL 2.X,
+    it can be run on older hardware with the
+    help of some runtime version checks
+*/
+
 #define CL_TARGET_OPENCL_VERSION 200
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #ifdef __APPLE__
 #include <OpenCL/cl.h>
 #else
@@ -23,7 +30,7 @@
 #endif
 
 
-cl_device_id create_device()
+cl_device_id create_device(unsigned int* cl_version)
 {
     cl_device_id device = {0};
     cl_int err = 0;
@@ -63,6 +70,14 @@ cl_device_id create_device()
         clGetDeviceInfo(device, CL_DEVICE_VERSION, sizeof(version), version, NULL);
 
         printf("Found GPU device: %s; %s; %s\n", name, vendor, version);
+
+        if (cl_version) {
+            unsigned int v1 = 0, v2 = 0, v3 = 0;
+
+            if(sscanf(version, "OpenCL %d.%d.%d", &v1, &v2, &v3) != EOF) {
+                *cl_version = v1*100 + v2*10 + v3;
+            }
+        }
 
     } else {
         fprintf(stderr, "No available GPU devices found\n");
@@ -135,8 +150,9 @@ int main()
     transpose_matrix(B, BT, MATRIX_DIM);
 
     cl_int err = CL_SUCCESS;
+    unsigned int cl_version = 0;
 
-    cl_device_id device = create_device();
+    cl_device_id device = create_device(&cl_version);
     cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
     if(err != CL_SUCCESS) {
         perror("clCreateContext");
@@ -153,7 +169,14 @@ int main()
         exit(EXIT_FAILURE);
     };
 
-    cl_command_queue queue = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err); //!TODO check platform version
+    cl_command_queue queue = {0};
+    if (cl_version >= 200) {
+        const cl_queue_properties properties[] = {CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0};
+        queue = clCreateCommandQueueWithProperties(context, device, properties, &err);
+    } else {
+        printf("OpenCL version is %u, using deprecated clCreateCommandQueue()\n", cl_version);
+        queue = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
+    }
     if(err != CL_SUCCESS) {
         perror("clCreateCommandQueue");
         exit(EXIT_FAILURE);
@@ -178,7 +201,7 @@ int main()
     printf("Running %s() on device\n", KERNEL_FUNC);
 
     size_t global_size[2] = {MATRIX_DIM, MATRIX_DIM};
-    size_t local_size[2] = {DEVICE_LOCAL_SIZE, DEVICE_LOCAL_SIZE};
+    size_t local_size[2] = {DEVICE_LOCAL_SIZE, DEVICE_LOCAL_SIZE}; //!TODO CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE
     cl_event event = {0};
 
     err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, &event);
