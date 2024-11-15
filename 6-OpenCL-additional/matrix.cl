@@ -19,8 +19,8 @@ __kernel void simd_mul_matrix(__global long* A, __global long* BT, __global long
     long result = 0;
 
     for (int k = 0; k < dim; k += 4) {
-        a_vec = vload4(0, &A[row * dim + k]);
-        b_vec = vload4(0, &BT[col * dim + k]);
+        a_vec = vload4(0, &A[row*dim + k]);
+        b_vec = vload4(0, &BT[col*dim + k]);
 
         prod_vec = a_vec * b_vec;
 
