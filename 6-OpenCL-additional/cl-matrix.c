@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "../4-OpenMP-additional/matrix-tools.h"
 #include "cl-tools.h"
 
