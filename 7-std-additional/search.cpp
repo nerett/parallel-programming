@@ -11,31 +11,35 @@ std::mutex mtx;
 
 std::atomic<bool> found(false);
 
-void searchInBlock(const std::string& filename, const std::string& word, std::promise<bool>&& promise, std::streampos startPos, std::streamsize blockSize)
-{
+bool isDelimiter(char ch) {
+    return std::isspace(ch) || ch == '\0' || ch == '\n' || ch == '\r' || ch == '\t' || ch == '\f' || ch == '\v';
+}
+
+void searchInBlock(const std::string& filename, const std::string& word, std::promise<bool>&& promise, std::streampos startPos, std::streamsize blockSize) {
     try {
-        std::cout << "Thread launched!" << std::endl;
         std::ifstream file(filename);
         if (!file.is_open()) {
             throw std::runtime_error("Thread: unable to open file: " + filename);
         }
 
         file.seekg(startPos);
-        std::vector<char> buffer(blockSize);
-        file.read(buffer.data(), blockSize);
+        std::vector<char> buffer(blockSize + 100);
 
+        file.read(buffer.data(), buffer.size());
         std::string block(buffer.begin(), buffer.end());
 
+        size_t pos = block.find(word);
+        while (pos != std::string::npos) {
+            bool validStart = (pos == 0) || isDelimiter(block[pos - 1]);
+            bool validEnd = (pos + word.size() >= block.size()) || isDelimiter(block[pos + word.size()]);
 
-        if (found.load()) {
-            promise.set_value(false);
-            return;
-        }
+            if (validStart && validEnd) {
+                found.store(true);
+                promise.set_value(true);
+                return;
+            }
 
-        if (block.find(word) != std::string::npos) {
-            found.store(true);
-            promise.set_value(true);
-            return;
+            pos = block.find(word, pos + 1);
         }
 
         promise.set_value(false);
@@ -46,11 +50,10 @@ void searchInBlock(const std::string& filename, const std::string& word, std::pr
     }
 }
 
-int main()
-{
-    const std::string filename = "war-and-peace.txt";
+int main() {
+    const std::string filename = "benchmark2.txt";
     const std::string word = "SEARCHTARGET";
-    const int numThreads = 16;
+    const int numThreads = 1;
 
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
@@ -58,7 +61,6 @@ int main()
         return 1;
     }
 
-    // Получение размера файла
     std::streamsize fileSize = file.tellg();
     file.close();
 
@@ -69,27 +71,24 @@ int main()
     for (int i = 0; i < numThreads; ++i) {
         std::promise<bool> promise;
         futures.push_back(promise.get_future());
+
         std::streampos startPos = i * blockSize;
         threads.emplace_back(searchInBlock, filename, word, std::move(promise), startPos, blockSize);
     }
 
-
+    bool result = false;
     for (int i = 0; i < numThreads; ++i) {
         threads[i].join();
-    }
-
-    // Проверка результатов
-    for (auto& future : futures) {
         try {
-            if (future.get()) {
-                std::cout << "Found word!" << std::endl;
-                return 0;
+            if (futures[i].get()) {
+                result = true;
+                break;
             }
         } catch (const std::exception& e) {
-            std::cerr << "Exception on result processing: " << e.what() << std::endl;
+            std::cerr << "Exception while processing result: " << e.what() << std::endl;
         }
     }
 
-    std::cout << "Word not found." << std::endl;
+    std::cout << (result ? "Found word!" : "Word not found.") << std::endl;
     return 0;
 }
