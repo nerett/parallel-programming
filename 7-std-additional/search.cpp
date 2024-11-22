@@ -11,11 +11,13 @@ std::mutex mtx;
 
 std::atomic<bool> found(false);
 
-bool isDelimiter(char ch) {
+bool isDelimiter(char ch)
+{
     return std::isspace(ch) || ch == '\0' || ch == '\n' || ch == '\r' || ch == '\t' || ch == '\f' || ch == '\v';
 }
 
-void searchInBlock(const std::string& filename, const std::string& word, std::promise<bool>&& promise, std::streampos startPos, std::streamsize blockSize) {
+void searchInBlock(const std::string& filename, const std::string& word, std::promise<bool>&& promise, std::streampos startPos, std::streamsize blockSize)
+{
     try {
         std::ifstream file(filename);
         if (!file.is_open()) {
@@ -50,10 +52,11 @@ void searchInBlock(const std::string& filename, const std::string& word, std::pr
     }
 }
 
-int main() {
+int main()
+{
     const std::string filename = "benchmark2.txt";
     const std::string word = "SEARCHTARGET";
-    const int numThreads = 1;
+    const int numThreads = 16;
 
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
@@ -67,6 +70,8 @@ int main() {
     std::vector<std::thread> threads;
     std::vector<std::future<bool>> futures;
     std::streamsize blockSize = fileSize / numThreads;
+
+    auto start = std::chrono::steady_clock::now();
 
     for (int i = 0; i < numThreads; ++i) {
         std::promise<bool> promise;
@@ -89,6 +94,11 @@ int main() {
         }
     }
 
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> duration = end - start;
+
     std::cout << (result ? "Found word!" : "Word not found.") << std::endl;
+    std::cout << "Search time: " << duration.count() << std::endl;
+
     return 0;
 }
