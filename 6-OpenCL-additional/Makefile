@@ -17,6 +17,9 @@ info:
 matrix:
 	$(ENVC) $(CC) $(CFLAGS) cl-matrix.c $(LFLAGS)
 
+sort:
+	$(ENVC) $(CC) $(CFLAGS) cl-sort.c $(LFLAGS)
+
 run:
 	$(ENVC) ./a.out
 
