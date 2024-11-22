@@ -32,6 +32,11 @@ void searchInBlock(const std::string& filename, const std::string& word, std::pr
 
         size_t pos = block.find(word);
         while (pos != std::string::npos) {
+            if (found.load()) {
+                promise.set_value(false);
+                return;
+            }
+
             bool validStart = (pos == 0) || isDelimiter(block[pos - 1]);
             bool validEnd = (pos + word.size() >= block.size()) || isDelimiter(block[pos + word.size()]);
 
@@ -54,7 +59,7 @@ void searchInBlock(const std::string& filename, const std::string& word, std::pr
 
 int main()
 {
-    const std::string filename = "benchmark2.txt";
+    const std::string filename = "benchmark3.txt";
     const std::string word = "SEARCHTARGET";
     const int numThreads = 16;
 
